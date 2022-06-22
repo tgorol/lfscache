@@ -104,8 +104,8 @@ func New(logger log.Logger, upstream, directory string, tlsTimeout int, dialTime
 }
 
 // NewNoCache returns a new LFS proxy server, with no caching.
-func NewNoCache(logger log.Logger, upstream string) (*Server, error) {
-	return newServer(logger, upstream, "", false)
+func NewNoCache(logger log.Logger, upstream string, tlsTimeout int, dialTimeout int) (*Server, error) {
+	return newServer(logger, upstream, "", false, tlsTimeout, dialTimeout)
 }
 
 func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, lfsTimeout int, dialTimeout int) (*Server, error) {
@@ -124,11 +124,11 @@ func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool,
 		client: &http.Client{
 			Transport: &http.Transport{
 				Dial: (&net.Dialer{
-					Timeout:   dialTimeout * time.Second,
+					Timeout:   time.Duration(dialTimeout) * time.Second,
 					KeepAlive: 30 * time.Second,
 				}).Dial,
 				ForceAttemptHTTP2:     true,
-				TLSHandshakeTimeout:   lfsTimeout * time.Second,
+				TLSHandshakeTimeout:   time.Duration(lfsTimeout) * time.Second,
 				ResponseHeaderTimeout: 10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
 			},
