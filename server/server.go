@@ -108,7 +108,7 @@ func NewNoCache(logger log.Logger, upstream string, tlsTimeout int, dialTimeout 
 	return newServer(logger, upstream, "", false, tlsTimeout, dialTimeout)
 }
 
-func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, lfsTimeout int, dialTimeout int) (*Server, error) {
+func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, tlsTimeout int, dialTimeout int) (*Server, error) {
 	var fs *cache.FilesystemCache
 	var err error
 	if cacheEnabled {
@@ -128,7 +128,7 @@ func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool,
 					KeepAlive: 30 * time.Second,
 				}).Dial,
 				ForceAttemptHTTP2:     true,
-				TLSHandshakeTimeout:   time.Duration(lfsTimeout) * time.Second,
+				TLSHandshakeTimeout:   time.Duration(tlsTimeout) * time.Second,
 				ResponseHeaderTimeout: 10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
 			},

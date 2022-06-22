@@ -37,9 +37,6 @@ func main() {
 
 	flag.Parse()
 
-	fmt.Print(*tlsTimeout)
-	fmt.Print(*dialTimeout)
-
 	if *printVersion {
 		fmt.Printf("%v, commit %v, built at %v\n", version, commit, date)
 		os.Exit(0)
