@@ -58,7 +58,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s, err := server.New(logger, addr.String(), *directory, tlsTimeout, dialTimeout)
+	s, err := server.New(logger, addr.String(), *directory, *tlsTimeout, *dialTimeout)
 	if err != nil {
 		panic(err)
 	}
