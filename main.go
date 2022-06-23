@@ -24,15 +24,16 @@ var (
 
 func main() {
 	var (
-		httpAddr     = flag.String("http-addr", ":8080", "HTTP listen address")
-		httpsAddr    = flag.String("https-addr", ":8443", "HTTPS listen address (only enabled if key/cert options are provided)")
-		tlsKey       = flag.String("tls-key", "", "HTTPS TLS key filepath")
-		tlsCert      = flag.String("tls-cert", "", "HTTPS TLS certificate filepath")
-		lfsServerURL = flag.String("url", "", "LFS server URL")
-		directory    = flag.String("directory", "./objects", "cache directory")
-		tlsTimeout   = flag.Int("tlsTimeout", 30, "TLS handshake timeout in seconds")
-		dialTimeout  = flag.Int("dialTimeout", 30, "Initiate HTTP connection timeout in seconds")
-		printVersion = flag.Bool("v", false, "print version")
+		httpAddr                 = flag.String("http-addr", ":8080", "HTTP listen address")
+		httpsAddr                = flag.String("https-addr", ":8443", "HTTPS listen address (only enabled if key/cert options are provided)")
+		tlsKey                   = flag.String("tls-key", "", "HTTPS TLS key filepath")
+		tlsCert                  = flag.String("tls-cert", "", "HTTPS TLS certificate filepath")
+		lfsServerURL             = flag.String("url", "", "LFS server URL")
+		directory                = flag.String("directory", "./objects", "cache directory")
+		tlsTimeout               = flag.Int("tls-timeout", 30, "TLS handshake timeout in seconds")
+		dialTimeout              = flag.Int("dial-timeout", 30, "Initiate HTTP connection timeout in seconds")
+		maxConcurrentConnections = flag.Int("max-concurrent-connections", 8, "Maximum number of concurent connections")
+		printVersion             = flag.Bool("v", false, "print version")
 	)
 
 	flag.Parse()
@@ -58,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s, err := server.New(logger, addr.String(), *directory, *tlsTimeout, *dialTimeout)
+	s, err := server.New(logger, addr.String(), *directory, *maxConcurrentConnections, *tlsTimeout, *dialTimeout)
 	if err != nil {
 		panic(err)
 	}
