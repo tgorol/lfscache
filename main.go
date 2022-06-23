@@ -33,6 +33,7 @@ func main() {
 		tlsTimeout               = flag.Int("tls-timeout", 30, "TLS handshake timeout in seconds")
 		dialTimeout              = flag.Int("dial-timeout", 30, "Initiate HTTP connection timeout in seconds")
 		maxConcurrentConnections = flag.Int("max-concurrent-connections", 8, "Maximum number of concurent connections")
+		maxRetries               = flag.Int("max-retries-count", 8, "Maximum numbers of retries")
 		printVersion             = flag.Bool("v", false, "print version")
 	)
 
@@ -59,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s, err := server.New(logger, addr.String(), *directory, *maxConcurrentConnections, *tlsTimeout, *dialTimeout)
+	s, err := server.New(logger, addr.String(), *directory, *maxConcurrentConnections, *maxRetries, *tlsTimeout, *dialTimeout)
 	if err != nil {
 		panic(err)
 	}

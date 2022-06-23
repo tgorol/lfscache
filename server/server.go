@@ -95,21 +95,22 @@ type Server struct {
 	client        *http.Client
 	hmacKey       [64]byte
 	clientLimiter chan struct{}
+	maxRetries    int
 
 	ObjectBatchActionURLRewriter func(href *url.URL) *url.URL
 }
 
 // New returns a new LFS proxy caching server.
-func New(logger log.Logger, upstream, directory string, tlsTimeout int, maxConcurrentConnections int, dialTimeout int) (*Server, error) {
-	return newServer(logger, upstream, directory, true, maxConcurrentConnections, tlsTimeout, dialTimeout)
+func New(logger log.Logger, upstream, directory string, tlsTimeout int, maxConcurrentConnections int, maxRetries int, dialTimeout int) (*Server, error) {
+	return newServer(logger, upstream, directory, true, maxConcurrentConnections, maxRetries, tlsTimeout, dialTimeout)
 }
 
 // NewNoCache returns a new LFS proxy server, with no caching.
-func NewNoCache(logger log.Logger, upstream string, maxConcurrentConnections int, tlsTimeout int, dialTimeout int) (*Server, error) {
-	return newServer(logger, upstream, "", false, maxConcurrentConnections, tlsTimeout, dialTimeout)
+func NewNoCache(logger log.Logger, upstream string, maxConcurrentConnections int, maxRetries int, tlsTimeout int, dialTimeout int) (*Server, error) {
+	return newServer(logger, upstream, "", false, maxConcurrentConnections, maxRetries, tlsTimeout, dialTimeout)
 }
 
-func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, maxConcurrentConnections int, tlsTimeout int, dialTimeout int) (*Server, error) {
+func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, maxConcurrentConnections int, maxRetries int, tlsTimeout int, dialTimeout int) (*Server, error) {
 	var fs *cache.FilesystemCache
 	var err error
 	if cacheEnabled {
@@ -130,12 +131,13 @@ func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool,
 				}).Dial,
 				ForceAttemptHTTP2:     true,
 				TLSHandshakeTimeout:   time.Duration(tlsTimeout) * time.Second,
-				ResponseHeaderTimeout: 10 * time.Second,
+				ResponseHeaderTimeout: 30 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
 			},
 		},
 		ObjectBatchActionURLRewriter: DefaultObjectBatchActionURLRewriter,
 		clientLimiter:                make(chan struct{}, maxConcurrentConnections),
+		maxRetries:                   maxRetries,
 	}
 
 	_, err = rand.Read(s.hmacKey[:])
@@ -400,11 +402,17 @@ func (s *Server) parseHeaders(r *http.Request) (url string, size int, header htt
 	return
 }
 
-func (s *Server) fetch(w io.Writer, oid, url string, size int, header http.Header) (err error) {
-	s.clientLimiter <- struct{}{}
+func (s *Server) doClientRequest(req *http.Request, num int) (*http.Response, error) {
+	resp, err := s.client.Do(req)
+	if err != nil && num > 0 {
+		time.Sleep(5 * time.Second)
+		return s.doClientRequest(req, num-1)
+	}
 
-	defer func() { <-s.clientLimiter }()
+	return resp, err
+}
 
+func (s *Server) fetchNoLimit(w io.Writer, oid, url string, size int, header http.Header) (err error) {
 	level.Info(s.logger).Log("event", "fetching", "oid", oid)
 
 	hcw := &hashCountWriter{
@@ -436,7 +444,7 @@ func (s *Server) fetch(w io.Writer, oid, url string, size int, header http.Heade
 	}
 
 	req.Header = header
-	resp, err := s.client.Do(req)
+	resp, err := s.doClientRequest(req, s.maxRetries)
 	if err != nil {
 		return err
 	}
@@ -456,6 +464,14 @@ func (s *Server) fetch(w io.Writer, oid, url string, size int, header http.Heade
 	}
 
 	return err
+}
+
+func (s *Server) fetch(w io.Writer, oid, url string, size int, header http.Header) (err error) {
+	s.clientLimiter <- struct{}{}
+
+	defer func() { <-s.clientLimiter }()
+
+	return s.fetchNoLimit(w, oid, url, size, header)
 }
 
 type nc struct {
