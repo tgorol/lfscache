@@ -403,7 +403,7 @@ func (s *Server) parseHeaders(r *http.Request) (url string, size int, header htt
 func (s *Server) fetch(w io.Writer, oid, url string, size int, header http.Header) (err error) {
 	s.clientLimiter <- struct{}{}
 
-	defer func() { <-s.clientLimiter }
+	defer func() { <-s.clientLimiter }()
 
 	level.Info(s.logger).Log("event", "fetching", "oid", oid)
 
