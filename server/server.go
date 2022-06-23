@@ -96,21 +96,22 @@ type Server struct {
 	hmacKey       [64]byte
 	clientLimiter chan struct{}
 	maxRetries    int
+	retryDelay    time.Duration
 
 	ObjectBatchActionURLRewriter func(href *url.URL) *url.URL
 }
 
 // New returns a new LFS proxy caching server.
-func New(logger log.Logger, upstream, directory string, tlsTimeout int, maxConcurrentConnections int, maxRetries int, dialTimeout int) (*Server, error) {
-	return newServer(logger, upstream, directory, true, maxConcurrentConnections, maxRetries, tlsTimeout, dialTimeout)
+func New(logger log.Logger, upstream, directory string, tlsTimeout int, maxConcurrentConnections int, maxRetries int, retryDelay int, dialTimeout int) (*Server, error) {
+	return newServer(logger, upstream, directory, true, maxConcurrentConnections, maxRetries, retryDelay, tlsTimeout, dialTimeout)
 }
 
 // NewNoCache returns a new LFS proxy server, with no caching.
-func NewNoCache(logger log.Logger, upstream string, maxConcurrentConnections int, maxRetries int, tlsTimeout int, dialTimeout int) (*Server, error) {
-	return newServer(logger, upstream, "", false, maxConcurrentConnections, maxRetries, tlsTimeout, dialTimeout)
+func NewNoCache(logger log.Logger, upstream string, maxConcurrentConnections int, maxRetries int, retryDelay int, tlsTimeout int, dialTimeout int) (*Server, error) {
+	return newServer(logger, upstream, "", false, maxConcurrentConnections, maxRetries, retryDelay, tlsTimeout, dialTimeout)
 }
 
-func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, maxConcurrentConnections int, maxRetries int, tlsTimeout int, dialTimeout int) (*Server, error) {
+func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, maxConcurrentConnections int, maxRetries int, retryDelay int, tlsTimeout int, dialTimeout int) (*Server, error) {
 	var fs *cache.FilesystemCache
 	var err error
 	if cacheEnabled {
@@ -138,6 +139,7 @@ func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool,
 		ObjectBatchActionURLRewriter: DefaultObjectBatchActionURLRewriter,
 		clientLimiter:                make(chan struct{}, maxConcurrentConnections),
 		maxRetries:                   maxRetries,
+		retryDelay:                   time.Duration(retryDelay) * time.Second,
 	}
 
 	_, err = rand.Read(s.hmacKey[:])
@@ -402,18 +404,33 @@ func (s *Server) parseHeaders(r *http.Request) (url string, size int, header htt
 	return
 }
 
-func (s *Server) doClientRequest(req *http.Request, num int) (*http.Response, error) {
+func (s *Server) doClientRequest(req *http.Request, num int, delay time.Duration, logger *log.Logger) (*http.Response, error) {
 	resp, err := s.client.Do(req)
 	if err != nil && num > 0 {
-		time.Sleep(5 * time.Second)
-		return s.doClientRequest(req, num-1)
+		level.Warn(*logger).Log("status_code", resp.StatusCode, "retry", "true", "retry_after", delay)
+		time.Sleep(delay)
+		return s.doClientRequest(req, num-1, 2*delay, logger)
+	}
+
+	if resp.StatusCode == http.StatusTooManyRequests && num > 0 {
+		level.Warn(*logger).Log("status_code", resp.StatusCode)
+		backOffTime, err := strconv.ParseInt(resp.Header.Get("Retry-After"), 10, 32)
+		if err != nil {
+			backOffTime = 10
+		}
+
+		delayTime := time.Duration(backOffTime) * time.Second
+		level.Info(*logger).Log("retry", "true", "retry_after", delayTime)
+
+		time.Sleep(delayTime)
+		return s.doClientRequest(req, num-1, 2*delay, logger)
 	}
 
 	return resp, err
 }
 
 func (s *Server) fetchNoLimit(w io.Writer, oid, url string, size int, header http.Header) (err error) {
-	level.Info(s.logger).Log("event", "fetching", "oid", oid)
+	logger := log.With(s.logger, "event", "fetching", "oid", oid)
 
 	hcw := &hashCountWriter{
 		h: sha256.New(),
@@ -444,7 +461,7 @@ func (s *Server) fetchNoLimit(w io.Writer, oid, url string, size int, header htt
 	}
 
 	req.Header = header
-	resp, err := s.doClientRequest(req, s.maxRetries)
+	resp, err := s.doClientRequest(req, s.maxRetries, s.retryDelay, &logger)
 	if err != nil {
 		return err
 	}
