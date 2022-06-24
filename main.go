@@ -34,8 +34,6 @@ func main() {
 		dialTimeout           = flag.Int("dial-timeout", 30, "Initiate HTTP connection timeout in seconds")
 		keepAlive             = flag.Int("keep-alive", 30, "Keep connection alive timeout")
 		responseHeaderTimeout = flag.Int("response-header-timeout", 30, "Response header timeout")
-		maxRetries            = flag.Int("max-retries-count", 5, "Maximum numbers of retries")
-		retryDelay            = flag.Int("retry-delay", 3, "Initial delay between retries. It is doubled with every retry")
 		printVersion          = flag.Bool("v", false, "print version")
 	)
 
@@ -62,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s, err := server.New(logger, addr.String(), *directory, *maxRetries, *retryDelay, *tlsTimeout, *dialTimeout, *keepAlive, *responseHeaderTimeout)
+	s, err := server.New(logger, addr.String(), *directory, *tlsTimeout, *dialTimeout, *keepAlive, *responseHeaderTimeout)
 	if err != nil {
 		panic(err)
 	}

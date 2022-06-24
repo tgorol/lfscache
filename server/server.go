@@ -88,29 +88,27 @@ func DefaultObjectBatchActionURLRewriter(href *url.URL) *url.URL {
 
 // Server is a LFS caching server.
 type Server struct {
-	logger     log.Logger
-	upstream   *url.URL
-	mux        *http.ServeMux
-	cache      *cache.FilesystemCache
-	client     *http.Client
-	hmacKey    [64]byte
-	maxRetries int
-	retryDelay time.Duration
+	logger   log.Logger
+	upstream *url.URL
+	mux      *http.ServeMux
+	cache    *cache.FilesystemCache
+	client   *http.Client
+	hmacKey  [64]byte
 
 	ObjectBatchActionURLRewriter func(href *url.URL) *url.URL
 }
 
 // New returns a new LFS proxy caching server.
-func New(logger log.Logger, upstream, directory string, tlsTimeout int, maxRetries int, retryDelay int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
-	return newServer(logger, upstream, directory, true, maxRetries, retryDelay, tlsTimeout, dialTimeout, keepAlive, responseHeaderTimeout)
+func New(logger log.Logger, upstream, directory string, tlsTimeout int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
+	return newServer(logger, upstream, directory, true, tlsTimeout, dialTimeout, keepAlive, responseHeaderTimeout)
 }
 
 // NewNoCache returns a new LFS proxy server, with no caching.
-func NewNoCache(logger log.Logger, upstream string, maxRetries int, retryDelay int, tlsTimeout int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
-	return newServer(logger, upstream, "", false, maxRetries, retryDelay, tlsTimeout, dialTimeout, keepAlive, responseHeaderTimeout)
+func NewNoCache(logger log.Logger, upstream string, tlsTimeout int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
+	return newServer(logger, upstream, "", false, tlsTimeout, dialTimeout, keepAlive, responseHeaderTimeout)
 }
 
-func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, maxRetries int, retryDelay int, tlsTimeout int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
+func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, tlsTimeout int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
 	var fs *cache.FilesystemCache
 	var err error
 	if cacheEnabled {
@@ -136,8 +134,6 @@ func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool,
 			},
 		},
 		ObjectBatchActionURLRewriter: DefaultObjectBatchActionURLRewriter,
-		maxRetries:                   maxRetries,
-		retryDelay:                   time.Duration(retryDelay) * time.Second,
 	}
 
 	_, err = rand.Read(s.hmacKey[:])
@@ -402,29 +398,8 @@ func (s *Server) parseHeaders(r *http.Request) (url string, size int, header htt
 	return
 }
 
-func (s *Server) doClientRequest(req *http.Request, num int, delay time.Duration, logger *log.Logger) (*http.Response, error) {
-	resp, err := s.client.Do(req)
-	if resp.StatusCode == http.StatusTooManyRequests && num > 0 {
-		level.Warn(*logger).Log("status_code", resp.StatusCode)
-
-		delayTime := 10 * time.Second
-		level.Info(*logger).Log("retry", "true", "retry_after", delayTime)
-
-		time.Sleep(delayTime)
-		return s.doClientRequest(req, num-1, 2*delay, logger)
-	}
-
-	if err != nil && num > 0 {
-		level.Warn(*logger).Log("status_code", resp.StatusCode, "retry", "true", "retry_after", delay)
-		time.Sleep(delay)
-		return s.doClientRequest(req, num-1, 2*delay, logger)
-	}
-
-	return resp, err
-}
-
 func (s *Server) fetch(w io.Writer, oid, url string, size int, header http.Header) (err error) {
-	logger := log.With(s.logger, "event", "fetching", "oid", oid)
+	level.Info(s.logger).Log("event", "fetching", "oid", oid)
 
 	hcw := &hashCountWriter{
 		h: sha256.New(),
@@ -455,7 +430,7 @@ func (s *Server) fetch(w io.Writer, oid, url string, size int, header http.Heade
 	}
 
 	req.Header = header
-	resp, err := s.doClientRequest(req, s.maxRetries, s.retryDelay, &logger)
+	resp, err := s.client.Do(req)
 	if err != nil {
 		return err
 	}
