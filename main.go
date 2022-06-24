@@ -32,6 +32,8 @@ func main() {
 		directory                = flag.String("directory", "./objects", "cache directory")
 		tlsTimeout               = flag.Int("tls-timeout", 30, "TLS handshake timeout in seconds")
 		dialTimeout              = flag.Int("dial-timeout", 30, "Initiate HTTP connection timeout in seconds")
+		keepAlive                = flag.Int("keep-alive", 30, "Keep connection alive timeout")
+		responseHeaderTimeout    = flag.Int("response-header-timeout", 30, "Response header timeout")
 		maxConcurrentConnections = flag.Int("max-concurrent-connections", 8, "Maximum number of concurent connections")
 		maxRetries               = flag.Int("max-retries-count", 8, "Maximum numbers of retries")
 		retryDelay               = flag.Int("retry-delay", 10, "Maximum time in seconds LFS will wait between each retry attempt")
@@ -61,7 +63,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s, err := server.New(logger, addr.String(), *directory, *maxConcurrentConnections, *maxRetries, *retryDelay, *tlsTimeout, *dialTimeout)
+	s, err := server.New(logger, addr.String(), *directory, *maxConcurrentConnections, *maxRetries, *retryDelay, *tlsTimeout, *dialTimeout, *keepAlive, *responseHeaderTimeout)
 	if err != nil {
 		panic(err)
 	}

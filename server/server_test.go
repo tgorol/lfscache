@@ -47,7 +47,7 @@ func server() (*httptest.Server, *Server, string, error) {
 		return ts, nil, dir, err
 	}
 
-	s, err := New(log.NewNopLogger(), ts.URL, dir, 8, 5, 10, 10, 8)
+	s, err := New(log.NewNopLogger(), ts.URL, dir, 8, 5, 10, 10, 8, 10, 10)
 
 	return ts, s, dir, err
 }

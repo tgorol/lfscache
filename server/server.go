@@ -102,16 +102,16 @@ type Server struct {
 }
 
 // New returns a new LFS proxy caching server.
-func New(logger log.Logger, upstream, directory string, tlsTimeout int, maxConcurrentConnections int, maxRetries int, retryDelay int, dialTimeout int) (*Server, error) {
-	return newServer(logger, upstream, directory, true, maxConcurrentConnections, maxRetries, retryDelay, tlsTimeout, dialTimeout)
+func New(logger log.Logger, upstream, directory string, tlsTimeout int, maxConcurrentConnections int, maxRetries int, retryDelay int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
+	return newServer(logger, upstream, directory, true, maxConcurrentConnections, maxRetries, retryDelay, tlsTimeout, dialTimeout, keepAlive, responseHeaderTimeout)
 }
 
 // NewNoCache returns a new LFS proxy server, with no caching.
-func NewNoCache(logger log.Logger, upstream string, maxConcurrentConnections int, maxRetries int, retryDelay int, tlsTimeout int, dialTimeout int) (*Server, error) {
-	return newServer(logger, upstream, "", false, maxConcurrentConnections, maxRetries, retryDelay, tlsTimeout, dialTimeout)
+func NewNoCache(logger log.Logger, upstream string, maxConcurrentConnections int, maxRetries int, retryDelay int, tlsTimeout int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
+	return newServer(logger, upstream, "", false, maxConcurrentConnections, maxRetries, retryDelay, tlsTimeout, dialTimeout, keepAlive, responseHeaderTimeout)
 }
 
-func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, maxConcurrentConnections int, maxRetries int, retryDelay int, tlsTimeout int, dialTimeout int) (*Server, error) {
+func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool, maxConcurrentConnections int, maxRetries int, retryDelay int, tlsTimeout int, dialTimeout int, keepAlive int, responseHeaderTimeout int) (*Server, error) {
 	var fs *cache.FilesystemCache
 	var err error
 	if cacheEnabled {
@@ -128,11 +128,11 @@ func newServer(logger log.Logger, upstream, directory string, cacheEnabled bool,
 			Transport: &http.Transport{
 				Dial: (&net.Dialer{
 					Timeout:   time.Duration(dialTimeout) * time.Second,
-					KeepAlive: 30 * time.Second,
+					KeepAlive: time.Duration(keepAlive) * time.Second,
 				}).Dial,
 				ForceAttemptHTTP2:     true,
 				TLSHandshakeTimeout:   time.Duration(tlsTimeout) * time.Second,
-				ResponseHeaderTimeout: 30 * time.Second,
+				ResponseHeaderTimeout: time.Duration(responseHeaderTimeout) * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
 			},
 		},
