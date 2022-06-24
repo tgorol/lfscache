@@ -406,23 +406,19 @@ func (s *Server) parseHeaders(r *http.Request) (url string, size int, header htt
 
 func (s *Server) doClientRequest(req *http.Request, num int, delay time.Duration, logger *log.Logger) (*http.Response, error) {
 	resp, err := s.client.Do(req)
-	if err != nil && num > 0 {
-		level.Warn(*logger).Log("status_code", resp.StatusCode, "retry", "true", "retry_after", delay)
-		time.Sleep(delay)
-		return s.doClientRequest(req, num-1, 2*delay, logger)
-	}
-
 	if resp.StatusCode == http.StatusTooManyRequests && num > 0 {
 		level.Warn(*logger).Log("status_code", resp.StatusCode)
-		backOffTime, err := strconv.ParseInt(resp.Header.Get("Retry-After"), 10, 32)
-		if err != nil {
-			backOffTime = 10
-		}
 
-		delayTime := time.Duration(backOffTime) * time.Second
+		delayTime := 10 * time.Second
 		level.Info(*logger).Log("retry", "true", "retry_after", delayTime)
 
 		time.Sleep(delayTime)
+		return s.doClientRequest(req, num-1, 2*delay, logger)
+	}
+
+	if err != nil && num > 0 {
+		level.Warn(*logger).Log("status_code", resp.StatusCode, "retry", "true", "retry_after", delay)
+		time.Sleep(delay)
 		return s.doClientRequest(req, num-1, 2*delay, logger)
 	}
 
